@@ -1,186 +1,189 @@
-from datetime import datetime, timedelta
-from enum import Enum
-from sqlalchemy.orm import DeclarativeBase
+# database/models.py
+from datetime import datetime, date, timedelta, timezone
+
 from sqlalchemy import (
-    Column,
-    Integer,
     String,
-    Boolean,
-    Date,
-    DateTime,
-    ForeignKey,
     Text,
+    DateTime,
+    Date,
+    BigInteger,
+    ForeignKey,
     Index,
+    func,
 )
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import  relationship
-
-
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
 
-
-class RoleEnum(str, Enum):
-    USER = "user"
-    ADMIN = "admin"
-    SUPERUSER = "superuser"
+def default_expires_at() -> datetime:
+    """Время истечения через 24 часа."""
+    return datetime.now(timezone.utc) + timedelta(hours=24)
 
 
-class RequestTypeEnum(str, Enum):
-    DAY_OFF = "day_off"                    # Отгул
-    REMOTE = "remote"                      # Удаленная работа
-    VACATION = "vacation"                  # Отпуск
-    SICK_LEAVE = "sick_leave"              # Больничный
-    PARTIAL_ABSENCE = "partial_absence"  # Частичное отсутствие
+class Employee(Base):
+    """Сотрудник компании."""
 
-
-class RequestStatusEnum(str, Enum):
-    PENDING = "pending"      # На рассмотрении
-    APPROVED = "approved"    # Одобрено
-    REJECTED = "rejected"    # Отклонено
-    CANCELLED = "cancelled"  # Отменено
-
-
-class ChangeTypeEnum(str, Enum):
-    CREATED = "created"  # Создание
-    STATUS_CHANGED = "status_changed"  # Изменение статуса
-    COMMENT_UPDATED = "comment_updated"  # Обновление комментария
-    CANCELLED = "cancelled"  # Отмена
-
-
-class Person(Base):
     __tablename__ = "employees"
 
-    id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, unique=True, nullable=True, index=True)
-    name = Column(String(100), nullable=False)
-    last_name = Column(String(100), nullable=False)  
-    patronymic = Column(String(100), nullable=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    position = Column(String(200))
-    role = Column(SQLEnum(RoleEnum), default=RoleEnum.USER, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.now, onupdate=datetime.now, nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[str] = mapped_column(String(100))
+    patronymic: Mapped[str | None] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    position: Mapped[str | None] = mapped_column(String(200))
+    role: Mapped[str] = mapped_column(String(50))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Связи
-    invite_codes = relationship("InviteCode", back_populates="employee")
-    requests = relationship("Request", back_populates="employee")
-    created_invites = relationship(
-        "InviteCode", foreign_keys="[InviteCode.created_by]", back_populates="creator"
+    invite_codes: Mapped[list["InviteCode"]] = relationship(
+        back_populates="employee",
+        foreign_keys="[InviteCode.employee_id]",
+        cascade="all, delete-orphan",
     )
-    request_history = relationship(
-        "RequestHistory",
-        foreign_keys="[RequestHistory.changed_by]",
-        back_populates="changer",
+    created_invites: Mapped[list["InviteCode"]] = relationship(
+        foreign_keys="[InviteCode.created_by]", back_populates="creator"
     )
-    admin_notifications = relationship("AdminNotification", back_populates="admin")
+    absence_requests: Mapped[list["AbsenceRequest"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
+    request_changes: Mapped[list["AbsenceRequestHistory"]] = relationship(
+        foreign_keys="[AbsenceRequestHistory.changed_by]", back_populates="changer"
+    )
+    notifications: Mapped[list["AdminNotification"]] = relationship(
+        back_populates="admin", cascade="all, delete-orphan"
+    )
 
 
 class InviteCode(Base):
+    """Инвайт-код для привязки Telegram."""
+
     __tablename__ = "invite_codes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(50), unique=True, nullable=False, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
-    created_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=False)
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    expires_at = Column(DateTime, default=lambda: datetime.now, nullable=False)
-    is_used = Column(Boolean, default=False, nullable=False)  
-    used_at = Column(DateTime, nullable=True) 
-
-    # Связи
-    employee = relationship(
-        "Person", foreign_keys=[employee_id], back_populates="invite_codes"
-    )
-    creator = relationship(
-        "Person", foreign_keys=[created_by], back_populates="created_invites"
-    )
-
-    # Индекс быстрого поиска активных кодов
     __table_args__ = (Index("idx_invite_code_active", "code", "is_used", "expires_at"),)
 
-
-class Request(Base):
-    __tablename__ = "requests"
-
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(
-        Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE")
     )
-    request_type = Column(SQLEnum(RequestTypeEnum), nullable=False)
-    start_date = Column(Date, nullable=False)  
-    end_date = Column(Date, nullable=False)  
-    comment = Column(Text)  
-    status = Column(
-        SQLEnum(RequestStatusEnum), default=RequestStatusEnum.PENDING, nullable=False
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("employees.id", ondelete="SET NULL")
     )
-    rejected_reason = Column(Text)
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.now, onupdate=datetime.now, nullable=False
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    # Python default вместо server_default — работает везде!
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=default_expires_at
+    )
+    is_used: Mapped[bool] = mapped_column(default=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    employee: Mapped["Employee"] = relationship(
+        foreign_keys=[employee_id], back_populates="invite_codes"
+    )
+    creator: Mapped["Employee | None"] = relationship(
+        foreign_keys=[created_by], back_populates="created_invites"
     )
 
-    # Связи
-    employee = relationship("Person", back_populates="requests")
-    history = relationship("RequestHistory", back_populates="request")
-    notifications = relationship("AdminNotification", back_populates="request")
 
-    # Индексы
+class AbsenceRequest(Base):
+    """Заявка на отсутствие."""
+
+    __tablename__ = "absence_requests"
     __table_args__ = (
-        Index("idx_request_status", "status"),
-        Index("idx_request_dates", "start_date", "end_date"),
-        Index("idx_request_employee_dates", "employee_id", "start_date", "end_date"),
+        Index("idx_absence_request_status", "status"),
+        Index("idx_absence_request_dates", "start_date", "end_date"),
+        Index(
+            "idx_absence_request_employee_dates",
+            "employee_id",
+            "start_date",
+            "end_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE")
+    )
+    request_type: Mapped[str] = mapped_column(String(50))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    comment: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(50))
+    rejected_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    employee: Mapped["Employee"] = relationship(back_populates="absence_requests")
+    history: Mapped[list["AbsenceRequestHistory"]] = relationship(
+        back_populates="request", cascade="all, delete-orphan"
+    )
+    notifications: Mapped[list["AdminNotification"]] = relationship(
+        back_populates="request", cascade="all, delete-orphan"
     )
 
 
-class RequestHistory(Base):
-    __tablename__ = "request_history"
+class AbsenceRequestHistory(Base):
+    """История изменений заявки."""
 
-    id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(
-        Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False
-    )
-    changed_by = Column(
-        Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=False
-    )
-    change_type = Column(SQLEnum(ChangeTypeEnum), nullable=False)
-    old_value = Column(Text)
-    new_value = Column(Text)  
-    changed_at = Column(DateTime, default=datetime.now, nullable=False)
-    reason = Column(Text)
-
-    # Связи
-    request = relationship("Request", back_populates="history")
-    changer = relationship("Person", back_populates="request_history")
-
-    # Индексы быстрого поиска по заявке
+    __tablename__ = "absence_request_history"
     __table_args__ = (
-        Index("idx_history_request", "request_id", "changed_at"),
-        Index("idx_history_type", "change_type", "changed_at"),
+        Index("idx_absence_request_history_request", "request_id", "changed_at"),
+        Index("idx_absence_request_history_type", "change_type", "changed_at"),
     )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("absence_requests.id", ondelete="CASCADE")
+    )
+    changed_by: Mapped[int | None] = mapped_column(
+        ForeignKey("employees.id", ondelete="SET NULL")
+    )
+    change_type: Mapped[str] = mapped_column(String(50))
+    old_value: Mapped[str | None] = mapped_column(Text)
+    new_value: Mapped[str | None] = mapped_column(Text)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    reason: Mapped[str | None] = mapped_column(Text)
+
+    request: Mapped["AbsenceRequest"] = relationship(back_populates="history")
+    changer: Mapped["Employee | None"] = relationship(back_populates="request_changes")
 
 
 class AdminNotification(Base):
+    """Уведомление админу в Telegram."""
+
     __tablename__ = "admin_notifications"
-
-    id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
-    admin_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
-    message_id = Column(Integer, nullable=False)  # ID сообщения в Telegram
-    chat_id = Column(Integer, nullable=False)  # ID чата в Telegram
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)  
-
-    # Связи
-    request = relationship("Request", back_populates="notifications")
-    admin = relationship("Person", back_populates="admin_notifications")
-
-    # Индекс для быстрого поиска активных уведомлений
     __table_args__ = (
         Index("idx_notification_active", "admin_id", "is_active", "created_at"),
-        )
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("absence_requests.id", ondelete="CASCADE")
+    )
+    admin_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE")
+    )
+    message_id: Mapped[int] = mapped_column(BigInteger)
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+    request: Mapped["AbsenceRequest"] = relationship(back_populates="notifications")
+    admin: Mapped["Employee"] = relationship(back_populates="notifications")
