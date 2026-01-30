@@ -1,171 +1,88 @@
-# scripts/create_admin.py
-import os
+import asyncio
 import sys
 from pathlib import Path
-import secrets
-from datetime import datetime, timedelta, timezone
 
-# Добавляем корень проекта в sys.path
-project_root = Path(__file__).resolve().parent.parent
+current_dir = Path(__file__).parent
+project_root = current_dir.parent
 sys.path.insert(0, str(project_root))
 
-from sqlalchemy.orm import Session
-
-from database.models import Employee, InviteCode
-from database.db import SessionLocal
-
-
-def validate_email(email: str) -> bool:
-    import re
-
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    return bool(re.match(pattern, email))
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from config import config
+from database.models import Base
+from schemas.employee import EmployeeCreate
+from crud.employee import create_superuser
 
 
-def validate_telegram_id(tg_id: str) -> bool:
-    try:
-        return int(tg_id) > 0
-    except ValueError:
-        return False
+
+async def init_db():
+    """Инициализирует базу данных."""
+    engine = create_async_engine(
+        config.db.database_url,
+        future=True,
+    )
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    print("База данных инициализирована")
+    return engine
 
 
-def generate_invite_code() -> str:
-    """Генерирует уникальный инвайт-код."""
-    return secrets.token_urlsafe(16)
-
-
-def get_user_data():
-    email = input("Введите почту: ")
-    if not validate_email(email):
-        print("❌ Неверный формат email")
-        return None
-
-    telegram_id = input("Введите Telegram ID (или Enter для пропуска): ")
-    if telegram_id and not validate_telegram_id(telegram_id):
-        print("❌ Неверный Telegram ID")
-        return None
-
+def collect_user_data() -> dict:
+    """Собирает данные от пользователя."""
+    print("\nВведите данные суперпользователя:")
+    
     return {
-        "email": email,
-        "telegram_id": int(telegram_id) if telegram_id else None,
-        "name": input("Введите имя: "),
-        "last_name": input("Введите фамилию: "),
+        'name': input("Имя: "),
+        'last_name': input("Фамилия: "),
+        'patronymic': input("Отчество (опционально): ") or None,
+        'email': input("Email: "),
+        'position': input("Должность (опционально): ") or None,
     }
 
 
-def create_invite_code_for_user(db: Session, employee: Employee) -> InviteCode:
-    """Создает инвайт-код для сотрудника."""
+async def main():
+    """Основная функция скрипта."""
+    print("\n" + "="*50)
+    print("Создание суперпользователя".center(50))
+    print("="*50)
 
-    # Проверяем, есть ли уже активный инвайт
-    existing_invite = (
-        db.query(InviteCode)
-        .filter(
-            InviteCode.employee_id == employee.id,
-            InviteCode.is_used == False,
-            InviteCode.expires_at > datetime.now(timezone.utc),
-        )
-        .first()
+    engine = await init_db()
+
+    AsyncSessionLocal = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
     )
-
-    if existing_invite:
-        print(f"⚠️  У пользователя уже есть активный инвайт-код")
-        return existing_invite
-
-    # Создаем новый инвайт-код
-    invite_code = InviteCode(
-        code=generate_invite_code(),
-        employee_id=employee.id,
-        created_by=employee.id,  # Сам себя создал
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-        is_used=False,
-    )
-
-    db.add(invite_code)
-    db.commit()
-    db.refresh(invite_code)
-
-    return invite_code
-
-
-def create_or_update_superuser(db: Session, user_data: dict):
-    existing_user = (
-        db.query(Employee).filter(Employee.email == user_data["email"]).first()
-    )
-
-    if existing_user:
-        print(f"✓ Найден: {existing_user.email}")
-
-        existing_user.role = "superuser"
-        existing_user.is_active = True
-        existing_user.telegram_id = user_data.get("telegram_id")
-        existing_user.name = user_data["name"]
-        existing_user.last_name = user_data["last_name"]
-
-        db.commit()
-        print(f"✓ {existing_user.email} обновлен до суперпользователя")
-        return existing_user
-    else:
-        new_superuser = Employee(
-            email=user_data["email"],
-            telegram_id=user_data.get("telegram_id"),
-            name=user_data["name"],
-            last_name=user_data["last_name"],
-            role="superuser",
-            is_active=True,
-            position="Суперпользователь системы",
-        )
-        db.add(new_superuser)
-        db.commit()
-        db.refresh(new_superuser)
-
-        print(f"✓ Создан новый суперпользователь: {new_superuser.email}")
-        return new_superuser
-
-
-def main():
-    print("=" * 60)
-    print(" " * 15 + "СОЗДАНИЕ СУПЕРПОЛЬЗОВАТЕЛЯ")
-    print("=" * 60 + "\n")
-
-    user_data = get_user_data()
-    if not user_data:
-        return
-
-    db = SessionLocal()
-
+    
+    raw_data = collect_user_data()
+    
     try:
-        # Создаем/обновляем суперпользователя
-        superuser = create_or_update_superuser(db, user_data)
-
-        # Генерируем инвайт-код
-        invite = create_invite_code_for_user(db, superuser)
-
-        print("\n" + "=" * 60)
-        print("✅ СУПЕРПОЛЬЗОВАТЕЛЬ УСПЕШНО СОЗДАН:")
-        print("-" * 60)
-        print(f"ID:           {superuser.id}")
-        print(f"Email:        {superuser.email}")
-        print(f"Telegram ID:  {superuser.telegram_id or 'Не указан'}")
-        print(f"Имя:          {superuser.name} {superuser.last_name}")
-        print(f"Роль:         {superuser.role}")
-        print(f"Должность:    {superuser.position}")
-        print("-" * 60)
-        print("🔑 ИНВАЙТ-КОД ДЛЯ ПРИВЯЗКИ TELEGRAM:")
-        print(f"   {invite.code}")
-        print(f"   Истекает:  {invite.expires_at.strftime('%d.%m.%Y %H:%M')}")
-        print("=" * 60)
-
-        print("\n💡 Отправьте этот код боту для привязки Telegram аккаунта")
-
+        # Валидируем через Pydantic
+        employee_schema = EmployeeCreate(**raw_data)
+        
+        # Создаем сессию и суперпользователя
+        async with AsyncSessionLocal() as session:
+            superuser = await create_superuser(session, employee_schema)
+            
+            print("\n Суперпользователь успешно создан!")
+            print(f"   ID: {superuser.id}")
+            print(f"   Имя: {superuser.name} {superuser.last_name}")
+            print(f"   Email: {superuser.email}")
+            print(f"   Роль: {superuser.role}")
+            print(f"   Активен: {'Да' if superuser.is_active else 'Нет'}")
+            
+    except ValueError as e:
+        print(f"\n❌ Ошибка валидации: {e}")
+        sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Ошибка: {e}")
+        print(f"\n❌ Неожиданная ошибка: {e}")
         import traceback
-
         traceback.print_exc()
-        db.rollback()
+        sys.exit(1)
     finally:
-        db.close()
+        await engine.dispose()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

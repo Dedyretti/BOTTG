@@ -12,14 +12,14 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
+from consts import INVITE_EXPIRE_HOURS
 
 class Base(DeclarativeBase):
     pass
 
 def default_expires_at() -> datetime:
-    """Время истечения через 24 часа."""
-    return datetime.now(timezone.utc) + timedelta(hours=24)
+    """Время истечения через INVITE_EXPIRE_HOURS часов."""
+    return datetime.now(timezone.utc) + timedelta(hours=INVITE_EXPIRE_HOURS)
 
 
 class Employee(Base):

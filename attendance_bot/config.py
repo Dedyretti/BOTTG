@@ -41,7 +41,7 @@ class DbConfig(BaseSettings):
 class BotConfig(BaseSettings):
     """Конфигурация тг бота"""
     model_config = SettingsConfigDict(
-        env_prefix="tg_",  # ПРЕФИКС для переменных окружения
+        env_prefix="tg_", 
     )
     
     token: str = Field(default="")
