@@ -1,25 +1,18 @@
-# database/models.py
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, datetime
 
 from sqlalchemy import (
-    String,
-    Text,
-    DateTime,
-    Date,
     BigInteger,
+    Date,
+    DateTime,
     ForeignKey,
     Index,
+    String,
+    Text,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from consts import INVITE_EXPIRE_HOURS
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-class Base(DeclarativeBase):
-    pass
-
-def default_expires_at() -> datetime:
-    """Время истечения через INVITE_EXPIRE_HOURS часов."""
-    return datetime.now(timezone.utc) + timedelta(hours=INVITE_EXPIRE_HOURS)
+from database.base import Base
 
 
 class Employee(Base):
@@ -28,7 +21,9 @@ class Employee(Base):
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)
+    telegram_id: Mapped[int | None] = mapped_column(
+        BigInteger, unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
     patronymic: Mapped[str | None] = mapped_column(String(100))
@@ -40,7 +35,7 @@ class Employee(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now()
     )
 
     invite_codes: Mapped[list["InviteCode"]] = relationship(
@@ -55,7 +50,8 @@ class Employee(Base):
         back_populates="employee", cascade="all, delete-orphan"
     )
     request_changes: Mapped[list["AbsenceRequestHistory"]] = relationship(
-        foreign_keys="[AbsenceRequestHistory.changed_by]", back_populates="changer"
+        foreign_keys="[AbsenceRequestHistory.changed_by]",
+        back_populates="changer"
     )
     notifications: Mapped[list["AdminNotification"]] = relationship(
         back_populates="admin", cascade="all, delete-orphan"
@@ -66,7 +62,9 @@ class InviteCode(Base):
     """Инвайт-код для привязки Telegram."""
 
     __tablename__ = "invite_codes"
-    __table_args__ = (Index("idx_invite_code_active", "code", "is_used", "expires_at"),)
+    __table_args__ = (
+        Index("idx_invite_code_active", "code", "is_used", "expires_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
@@ -79,10 +77,7 @@ class InviteCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    # Python default вместо server_default — работает везде!
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=default_expires_at
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     is_used: Mapped[bool] = mapped_column(default=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -123,10 +118,14 @@ class AbsenceRequest(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
-    employee: Mapped["Employee"] = relationship(back_populates="absence_requests")
+    employee: Mapped["Employee"] = relationship(
+        back_populates="absence_requests"
+    )
     history: Mapped[list["AbsenceRequestHistory"]] = relationship(
         back_populates="request", cascade="all, delete-orphan"
     )
@@ -140,7 +139,11 @@ class AbsenceRequestHistory(Base):
 
     __tablename__ = "absence_request_history"
     __table_args__ = (
-        Index("idx_absence_request_history_request", "request_id", "changed_at"),
+        Index(
+            "idx_absence_request_history_request",
+            "request_id",
+            "changed_at",
+        ),
         Index("idx_absence_request_history_type", "change_type", "changed_at"),
     )
 
@@ -160,7 +163,9 @@ class AbsenceRequestHistory(Base):
     reason: Mapped[str | None] = mapped_column(Text)
 
     request: Mapped["AbsenceRequest"] = relationship(back_populates="history")
-    changer: Mapped["Employee | None"] = relationship(back_populates="request_changes")
+    changer: Mapped["Employee | None"] = relationship(
+        back_populates="request_changes"
+    )
 
 
 class AdminNotification(Base):
@@ -168,7 +173,12 @@ class AdminNotification(Base):
 
     __tablename__ = "admin_notifications"
     __table_args__ = (
-        Index("idx_notification_active", "admin_id", "is_active", "created_at"),
+        Index(
+            "idx_notification_active",
+            "admin_id",
+            "is_active",
+            "created_at",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -185,5 +195,7 @@ class AdminNotification(Base):
     )
     is_active: Mapped[bool] = mapped_column(default=True)
 
-    request: Mapped["AbsenceRequest"] = relationship(back_populates="notifications")
+    request: Mapped["AbsenceRequest"] = relationship(
+        back_populates="notifications"
+    )
     admin: Mapped["Employee"] = relationship(back_populates="notifications")
