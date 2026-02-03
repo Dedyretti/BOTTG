@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.exc import OperationalError
 
-from crud.employee import create_superuser
+from database.crud.employee import create_superuser
 from database.session import AsyncSessionLocal
 from schemas.employee import EmployeeCreate
 
@@ -27,6 +27,7 @@ def collect_user_data() -> dict:
 
 async def main():
     """Основная функция скрипта."""
+
     print("\n" + "=" * 50)
     print("Создание суперпользователя".center(50))
     print("=" * 50)
