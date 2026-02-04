@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    UUID as DB_UUID,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,7 +69,8 @@ class InviteCode(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    code: Mapped[UUID] = mapped_column(DB_UUID(as_uuid=True),
+                                       unique=True, index=True, default=uuid4)
     employee_id: Mapped[int] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE")
     )

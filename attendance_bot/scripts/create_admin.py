@@ -15,6 +15,7 @@ sys.path.insert(0, str(project_root))
 
 def collect_user_data() -> dict:
     """Собирает данные от пользователя."""
+
     print("\nВведите данные суперпользователя:")
     return {
         'name': input("Имя: "),
