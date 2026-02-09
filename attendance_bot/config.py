@@ -4,12 +4,12 @@ from urllib.parse import quote
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 BASE_DIR = Path(__file__).parent
 
 
 class DbConfig(BaseSettings):
-    """Конфигурация подключения к БД"""
+    """Конфигурация подключения к БД."""
+
     prod_db: bool = Field(default=False)
     host: str = Field(default="localhost")
     port: str = Field(default="5432")
@@ -20,11 +20,7 @@ class DbConfig(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """
-        Формирует строку подключения к БД
-        Returns:
-            URL подключения к PostgreSQL или SQLite в зависимости от режима.
-        """
+        """Формирует строку подключения к БД."""
         if self.prod_db:
             password = quote(self.password)
             return (
@@ -35,21 +31,24 @@ class DbConfig(BaseSettings):
 
 
 class BotConfig(BaseSettings):
-    """Конфигурация тг бота"""
+    """Конфигурация Telegram бота."""
+
     token: str = Field(default="")
 
 
 class Config(BaseSettings):
-    """Основной класс конфигурации"""
+    """Основной класс конфигурации."""
+
     model_config = SettingsConfigDict(
         case_sensitive=False,
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
-        env_nested_delimiter="__",
+        env_nested_delimiter="__"
     )
+
     db: DbConfig = Field(default_factory=DbConfig)
-    tg: BotConfig = Field(default_factory=BotConfig)
+    bot: BotConfig = Field(default_factory=BotConfig)
 
 
 config = Config()

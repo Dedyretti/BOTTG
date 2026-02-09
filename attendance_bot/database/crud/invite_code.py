@@ -10,6 +10,7 @@ async def mark_invite_code_used(
     session: AsyncSession,
     code: str,
 ) -> InviteCode | None:
+    """Функция для пометки инвайт-кода как использованного."""
     invite_code = await get_invite_code(session, code)
 
     if invite_code and not invite_code.is_used:
@@ -28,6 +29,8 @@ async def get_invite_code(
     created_by: int | None = None,
     expire_hours: int = INVITE_EXPIRE_HOURS,
 ) -> InviteCode:
+    """Функция для получения нового инвайт-кода для сотрудника."""
+
     expires_at = datetime.now(timezone.utc) + timedelta(hours=expire_hours)
 
     invite_code = InviteCode(

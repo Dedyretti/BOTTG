@@ -4,6 +4,8 @@ from database.enums import RoleEnum
 
 
 class EmployeeCreate(BaseModel):
+    """Схема для создания нового сотрудника."""
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str

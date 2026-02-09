@@ -1,34 +1,32 @@
 import asyncio
-import os
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.client.default import DefaultBotProperties
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from dotenv import load_dotenv
+from config import config
+from core.logger import setup_logging
 
+from database.session import AsyncSessionLocal as async_session
+from middlewares.db import DbSessionMiddleware
 
-load_dotenv()
+from bot.handlers import router as main_router
 
-TOKEN = os.getenv("BOT_TOKEN")
-
-
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
-
-
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.answer("Привет! Я бот на aiogram!")
-
-
-@dp.message()
-async def echo(message: types.Message):
-    await message.answer(f"Вы написали: {message.text}")
+logger = setup_logging(__name__)
 
 
 async def main():
-    print("Бот запущен...")
-    await dp.start_polling(bot)
 
+    bot = Bot(
+        token=config.bot.token,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
+    dp = Dispatcher(storage=MemoryStorage())
+
+    dp.update.middleware(DbSessionMiddleware(async_session))
+    dp.include_router(main_router)
+
+    logger.info("Запуск бота")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())

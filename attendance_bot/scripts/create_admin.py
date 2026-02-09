@@ -4,17 +4,17 @@ from pathlib import Path
 
 from sqlalchemy.exc import OperationalError
 
-from database.crud.employee import create_superuser
-from database.session import AsyncSessionLocal
-from schemas.employee import EmployeeCreate
-
 current_dir = Path(__file__).parent
 project_root = current_dir.parent
 sys.path.insert(0, str(project_root))
 
+from database.crud.employee import create_superuser
+from database.session import AsyncSessionLocal
+from schemas.employee import EmployeeCreate
+
 
 def collect_user_data() -> dict:
-    """Собирает данные от пользователя."""
+    """Функция для сбора данных суперпользователя из консоли."""
 
     print("\nВведите данные суперпользователя:")
     return {
@@ -27,22 +27,33 @@ def collect_user_data() -> dict:
 
 
 async def main():
-    """Основная функция скрипта."""
+    """Функция для создания суперпользователя в базе данных."""
 
     print("\n" + "=" * 50)
     print("Создание суперпользователя".center(50))
     print("=" * 50)
+
     raw_data = collect_user_data()
+
     try:
         employee_schema = EmployeeCreate(**raw_data)
         async with AsyncSessionLocal() as session:
             superuser = await create_superuser(session, employee_schema)
-            print(" Суперпользователь успешно создан!")
+
+            print("Суперпользователь успешно создан!")
             print(f"   ID: {superuser.id}")
             print(f"   Имя: {superuser.name} {superuser.last_name}")
             print(f"   Email: {superuser.email}")
             print(f"   Роль: {superuser.role}")
             print(f"   Активен: {'Да' if superuser.is_active else 'Нет'}")
+
+            if superuser.invite_codes:
+                invite_code = superuser.invite_codes[0]
+                print(f"   Инвайт-код: {invite_code.code}")
+                print(f"   Код истекает: {invite_code.expires_at}")
+            else:
+                print("   ❌ Инвайт-код не создан")
+
     except OperationalError as e:
         print(f"\n❌ Ошибка базы данных: {e}")
         print("ℹ️  Возможно таблицы не созданы. Выполните миграции:")

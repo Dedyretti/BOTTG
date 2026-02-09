@@ -1,5 +1,5 @@
-from datetime import date, datetime
-from uuid import UUID, uuid4
+from datetime import date, datetime, timedelta
+import uuid
 
 from sqlalchemy import (
     BigInteger,
@@ -44,9 +44,12 @@ class Employee(Base):
         back_populates="employee",
         foreign_keys="[InviteCode.employee_id]",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     created_invites: Mapped[list["InviteCode"]] = relationship(
-        foreign_keys="[InviteCode.created_by]", back_populates="creator"
+        foreign_keys="[InviteCode.created_by]",
+        back_populates="creator",
+        lazy="selectin"
     )
     absence_requests: Mapped[list["AbsenceRequest"]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
@@ -69,8 +72,11 @@ class InviteCode(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    code: Mapped[UUID] = mapped_column(DB_UUID(as_uuid=True),
-                                       unique=True, index=True, default=uuid4)
+    code: Mapped[uuid.UUID] = mapped_column(
+        DB_UUID(as_uuid=True),
+        unique=True,
+        default=uuid.uuid4,
+    )
     employee_id: Mapped[int] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE")
     )
@@ -80,7 +86,10 @@ class InviteCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now() + timedelta(days=1),
+    )
     is_used: Mapped[bool] = mapped_column(default=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
