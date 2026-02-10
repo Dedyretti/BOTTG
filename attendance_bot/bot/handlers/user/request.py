@@ -1,5 +1,3 @@
-"""Обработчики создания заявки на отсутствие."""
-
 from datetime import date
 
 from aiogram import Router, F

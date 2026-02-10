@@ -1,5 +1,3 @@
-"""Обработчики главного меню пользователя."""
-
 from aiogram import Router, F
 from aiogram.types import Message
 from sqlalchemy import select

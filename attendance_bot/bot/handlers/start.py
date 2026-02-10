@@ -1,5 +1,3 @@
-"""Обработчики команды /start и регистрации пользователей."""
-
 from datetime import datetime, timezone
 from uuid import UUID
 from core.logger import setup_logging

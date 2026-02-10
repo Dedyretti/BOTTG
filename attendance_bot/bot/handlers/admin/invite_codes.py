@@ -1,5 +1,3 @@
-"""Обработчики управления инвайт-кодами."""
-
 from datetime import datetime, timezone
 
 from aiogram import Router, F
