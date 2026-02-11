@@ -8,6 +8,8 @@ def setup_logging(
     level: str = "INFO",
     format_string: Optional[str] = None,
 ) -> logging.Logger:
+    """Настраивает логгер с заданным именем, уровнем и форматом."""
+
     if format_string is None:
         format_string = (
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

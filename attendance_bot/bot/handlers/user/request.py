@@ -39,6 +39,7 @@ async def start_request(message: Message, state: FSMContext):
 
 async def get_menu_by_role(session, telegram_id):
     """Возвращает меню в зависимости от роли пользователя."""
+
     result = await session.execute(
         select(Employee).where(Employee.telegram_id == telegram_id)
     )
@@ -52,6 +53,7 @@ async def get_menu_by_role(session, telegram_id):
 @router.callback_query(F.data == "req_cancel")
 async def cancel_request(callback: CallbackQuery, state: FSMContext, session):
     """Отменяет создание заявки."""
+
     await state.clear()
     await callback.message.edit_text("❌ Создание заявки отменено")
 

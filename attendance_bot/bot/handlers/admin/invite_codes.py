@@ -1,13 +1,16 @@
-from datetime import datetime, timezone
-
-from aiogram import Router, F
-from aiogram.types import Message
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from sqlalchemy import select
 
-from database.models import Employee, InviteCode
-from bot.keyboards.admin.menu import admin_menu, admin_cancel_menu
+from bot.keyboards.admin.menu import admin_cancel_menu, admin_menu
 from bot.states.states_fsm import InviteCodeStates
+from database.crud.invite_code import (
+    create_invite_code,
+    deactivate_old_invite_codes,
+    get_active_invite_code,
+)
+from database.models import Employee
 
 router = Router()
 
@@ -30,6 +33,7 @@ async def process_invite_email(message: Message, state: FSMContext, session):
 
     email = message.text.strip().lower()
 
+    # Поиск сотрудника
     result = await session.execute(
         select(Employee).where(Employee.email == email)
     )
@@ -52,14 +56,7 @@ async def process_invite_email(message: Message, state: FSMContext, session):
         )
         return
 
-    result = await session.execute(
-        select(InviteCode).where(
-            InviteCode.employee_id == employee.id,
-            not InviteCode.is_used,
-            InviteCode.expires_at > datetime.now(timezone.utc)
-        )
-    )
-    existing_code = result.scalar_one_or_none()
+    existing_code = await get_active_invite_code(session, employee.id)
 
     if existing_code:
         await state.clear()
@@ -71,20 +68,9 @@ async def process_invite_email(message: Message, state: FSMContext, session):
         )
         return
 
-    result = await session.execute(
-        select(InviteCode).where(
-            InviteCode.employee_id == employee.id,
-            not InviteCode.is_used
-        )
-    )
-    old_codes = result.scalars().all()
-    for old_code in old_codes:
-        old_code.is_used = True
+    await deactivate_old_invite_codes(session, employee.id)
 
-    new_code = InviteCode(employee_id=employee.id)
-    session.add(new_code)
-    await session.flush()
-    await session.refresh(new_code)
+    new_code = await create_invite_code(session, employee.id)
 
     await session.commit()
 

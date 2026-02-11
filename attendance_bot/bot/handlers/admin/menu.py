@@ -43,4 +43,5 @@ async def employees_menu(message: Message, session):
 @router.message(F.text == "📊 Отчёты")
 async def reports(message: Message):
     """Показывает меню отчётов."""
+
     await message.answer("📊 <b>Отчёты</b>\n\n🚧 В разработке")

@@ -1,5 +1,3 @@
-"""Inline-календарь для выбора даты."""
-
 from datetime import date
 from calendar import monthcalendar
 

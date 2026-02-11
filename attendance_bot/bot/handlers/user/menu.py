@@ -12,29 +12,6 @@ router = Router()
 logger = setup_logging(__name__)
 
 
-@router.message(F.text == "👤 Профиль")
-async def profile(message: Message, session):
-    """Показывает профиль пользователя."""
-
-    result = await session.execute(
-        select(Employee).where(Employee.telegram_id == message.from_user.id)
-    )
-    employee = result.scalar_one_or_none()
-
-    if not employee:
-        await message.answer("❌ Профиль не найден")
-        return
-
-    logger.info("Показ профиля пользователя")
-    await message.answer(
-        f"👤 <b>Ваш профиль</b>\n\n"
-        f"📛 {employee.last_name} {employee.name}\n"
-        f"📧 {employee.email}\n"
-        f"💼 {employee.position or 'Не указана'}\n"
-        f"🎭 Роль: {employee.role}"
-    )
-
-
 @router.message(F.text == "📋 Мои заявки")
 async def my_requests(message: Message, session):
     """Показывает заявки пользователя."""

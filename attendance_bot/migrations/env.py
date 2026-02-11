@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import config as app_config
+from config import config as app_config 
 from database.base import Base
 from database.models import (
     Employee,
@@ -21,6 +21,8 @@ from database.models import (
 )
 
 config = context.config
+
+config.set_main_option("sqlalchemy.url", app_config.db.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -41,14 +43,20 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_async_migrations() -> None:
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = app_config.db.database_url
+
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

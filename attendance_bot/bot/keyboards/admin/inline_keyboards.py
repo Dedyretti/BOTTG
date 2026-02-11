@@ -1,5 +1,3 @@
-"""Inline-клавиатуры для администратора."""
-
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 

@@ -1,5 +1,3 @@
-"""Клавиатуры для администратора."""
-
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
@@ -11,14 +9,11 @@ admin_menu = ReplyKeyboardMarkup(
         ],
         [
             KeyboardButton(text="👥 Сотрудники"),
-            KeyboardButton(text="➕ Добавить сотрудника")
-        ],
-        [
             KeyboardButton(text="📝 Подать заявку"),
-            KeyboardButton(text="📋 Мои заявки")
         ],
         [
             KeyboardButton(text="📊 Отчёты"),
+            KeyboardButton(text="📋 Мои заявки")
         ],
     ],
     resize_keyboard=True,

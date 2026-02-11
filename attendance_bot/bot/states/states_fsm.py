@@ -1,5 +1,3 @@
-"""Состояния FSM для всех процессов бота."""
-
 from aiogram.fsm.state import State, StatesGroup
 
 

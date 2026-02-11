@@ -9,7 +9,7 @@ from core.logger import setup_logging
 from database.session import AsyncSessionLocal as async_session
 from middlewares.db import DbSessionMiddleware
 
-from bot.handlers import router as main_router
+from bot.handlers import admin_router, user_router, anonymous_router
 
 logger = setup_logging(__name__)
 
@@ -23,7 +23,10 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     dp.update.middleware(DbSessionMiddleware(async_session))
-    dp.include_router(main_router)
+
+    dp.include_router(admin_router)
+    dp.include_router(user_router)
+    dp.include_router(anonymous_router)
 
     logger.info("Запуск бота")
     await dp.start_polling(bot)
