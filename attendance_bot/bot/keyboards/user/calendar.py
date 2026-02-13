@@ -3,7 +3,8 @@ from calendar import monthcalendar
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from bot.lexicon.lexicon import months, days
+
+from bot.lexicon.lexicon import days, months
 
 
 def get_calendar_keyboard(
@@ -19,27 +20,42 @@ def get_calendar_keyboard(
 
     builder = InlineKeyboardBuilder()
 
-    builder.button(text="◀️", callback_data=f"{prefix}:prev:{year}:{month}")
-    builder.button(text=f"{months[month]} {year}",
-                   callback_data=f"{prefix}:ignore")
-    builder.button(text="▶️", callback_data=f"{prefix}:next:{year}:{month}")
+    builder.button(
+        text="◀️",
+        callback_data=f"{prefix}:prev:{year}:{month}"
+    )
+    builder.button(
+        text=f"{months[month]} {year}",
+        callback_data=f"{prefix}:ignore"
+    )
+    builder.button(
+        text="▶️",
+        callback_data=f"{prefix}:next:{year}:{month}"
+    )
 
     for day in days:
         builder.button(text=day, callback_data=f"{prefix}:ignore")
 
     for week in monthcalendar(year, month):
-        for day in week:
-            if day == 0:
-                builder.button(text=" ", callback_data=f"{prefix}:ignore")
+        for day_num in week:
+            if day_num == 0:
+                builder.button(
+                    text=" ",
+                    callback_data=f"{prefix}:ignore"
+                )
             else:
-                current_date = date(year, month, day)
+                current_date = date(year, month, day_num)
                 if current_date < today:
-                    builder.button(text=f"·{day}·",
-                                   callback_data=f"{prefix}:ignore")
-                else:
+                    # Прошедшая дата - callback для алерта
                     builder.button(
-                        text=str(day),
-                        callback_data=f"{prefix}:day:{year}:{month}:{day}"
+                        text=f"·{day_num}·",
+                        callback_data=f"{prefix}:past:{year}:{month}:{day_num}"
+                    )
+                else:
+                    # Доступная дата
+                    builder.button(
+                        text=str(day_num),
+                        callback_data=f"{prefix}:day:{year}:{month}:{day_num}"
                     )
 
     builder.button(text="❌ Отмена", callback_data="req_cancel")

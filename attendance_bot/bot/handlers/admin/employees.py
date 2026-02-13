@@ -1,15 +1,17 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from pydantic import EmailStr, ValidationError
+from pydantic import EmailStr
 from sqlalchemy import select
 
 from bot.keyboards.admin.inline_keyboards import (
     get_confirm_delete_keyboard,
     get_selection_role_keyboard,
+    get_confirm_employee_keyboard,
 )
-from bot.keyboards.admin.menu import admin_cancel_menu, admin_menu
+
 from bot.lexicon.lexicon import roles
+from bot.keyboards.admin.menu import admin_cancel_menu, admin_menu
 from bot.states.states_fsm import AddEmployeeStates, DeleteStates
 from database.crud.employee import (
     create_employee,
@@ -111,72 +113,139 @@ async def cancel_role(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("role:"))
-async def process_role(callback: CallbackQuery, state: FSMContext, session):
-    """Обрабатывает выбор роли и создаёт сотрудника."""
+@router.callback_query(
+    F.data.startswith("role:"),
+    AddEmployeeStates.waiting_role
+)
+async def process_role_selection(
+    callback: CallbackQuery,
+    state: FSMContext
+):
+    """Обработка выбора роли и показ подтверждения."""
 
-    role_value = callback.data.split(":")[1]
+    role = callback.data.split(":")[1]
 
-    if role_value == "user":
-        role = RoleEnum.USER
-    elif role_value == "admin":
-        role = RoleEnum.ADMIN
-    else:
-        await callback.answer("Неверный выбор")
+    if role == "cancel":
+        await state.clear()
+        await callback.message.edit_text("❌ Добавление сотрудника отменено")
+        await callback.message.answer(
+            "Главное меню:",
+            reply_markup=admin_menu
+        )
+        await callback.answer()
         return
+
+    await state.update_data(role=role)
+    await state.set_state(AddEmployeeStates.confirming)
+
+    data = await state.get_data()
+    role_name = roles.get(role, role)
+
+    await callback.message.edit_text(
+        "📋 <b>Проверьте данные нового сотрудника:</b>\n\n"
+        f"👤 <b>Имя:</b> {data['name']}\n"
+        f"👤 <b>Фамилия:</b> {data['last_name']}\n"
+        f"📧 <b>Email:</b> {data['email']}\n"
+        f"💼 <b>Должность:</b> {data.get('position') or 'не указана'}\n"
+        f"🎭 <b>Роль:</b> {role_name}\n\n"
+        "Всё верно?",
+        reply_markup=get_confirm_employee_keyboard()
+    )
+    await callback.answer()
+
+
+@router.callback_query(
+    F.data == "employee:confirm",
+    AddEmployeeStates.confirming
+)
+async def confirm_create_employee(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session
+):
+    """Подтвердить создание сотрудника."""
 
     data = await state.get_data()
 
-    try:
-        employee_data = EmployeeCreate(
-            name=data["name"],
-            last_name=data["last_name"],
-            email=data["email"],
-            position=data.get("position"),
-            role=role
-        )
-    except ValidationError as e:
-        await callback.message.edit_text(f"❌ Ошибка валидации: {e}")
-        await state.clear()
-        await callback.answer()
-        return
-
-    try:
-        employee = await create_employee(
-            session=session,
-            employee_data=employee_data,
-            role=role,
-            create_invite=True
-        )
-    except ValueError as e:
-        await callback.message.edit_text(f"❌ Ошибка: {e}")
-        await state.clear()
-        await callback.answer()
-        return
-
-    await state.clear()
-
-    invite_code = employee.invite_codes[0] if employee.invite_codes else None
-    role_name = "👑 Админ" if role == RoleEnum.ADMIN else "👤 Пользователь"
-
-    text = (
-        f"✅ <b>Сотрудник создан!</b>\n\n"
-        f"👤 {employee.last_name} {employee.name}\n"
-        f"📧 {employee.email}\n"
-        f"💼 {employee.position or 'Не указана'}\n"
-        f"🎭 Роль: {role_name}\n\n"
+    employee_data = EmployeeCreate(
+        name=data["name"],
+        last_name=data["last_name"],
+        email=data["email"],
+        position=data.get("position"),
+        patronymic=None
     )
 
-    if invite_code:
-        text += (
-            f"🔑 <b>Инвайт-код:</b>\n"
-            f"<code>{invite_code.code}</code>\n\n"
-            f"⏰ Действителен до {invite_code.expires_at.strftime('%d.%m.%Y')}"
+    try:
+        role_enum = RoleEnum(data["role"])
+        employee = await create_employee(
+            session,
+            employee_data,
+            role=role_enum
         )
 
-    await callback.message.edit_text(text)
-    await callback.message.answer("Главное меню:", reply_markup=admin_menu)
-    await callback.answer("Сотрудник создан!")
+        invite_code = None
+        if employee.invite_codes:
+            invite_code = employee.invite_codes[0].code
+
+        success_text = (
+            "✅ <b>Сотрудник успешно добавлен!</b>\n\n"
+            f"👤 {employee.last_name} {employee.name}\n"
+            f"📧 {employee.email}\n"
+            f"🎭 Роль: {roles.get(employee.role, employee.role)}\n"
+        )
+
+        if invite_code:
+            success_text += (
+                f"\n🔑 <b>Инвайт-код:</b>\n"
+                f"<code>{invite_code}</code>"
+            )
+
+        await callback.message.edit_text(success_text)
+        await callback.message.answer(
+            "Главное меню:",
+            reply_markup=admin_menu
+        )
+
+    except ValueError as e:
+        await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
+        await callback.message.answer(
+            "Главное меню:",
+            reply_markup=admin_menu
+        )
+
+    await state.clear()
+    await callback.answer("✅ Сотрудник создан")
+
+
+@router.callback_query(
+    F.data == "employee:edit",
+    AddEmployeeStates.confirming
+)
+async def edit_employee_data(callback: CallbackQuery, state: FSMContext):
+    """Начать редактирование данных сотрудника."""
+
+    await state.set_state(AddEmployeeStates.waiting_name)
+    await callback.message.edit_text(
+        "✏️ <b>Редактирование данных</b>\n\n"
+        "Введите <b>имя</b> сотрудника:"
+    )
+    await callback.answer()
+
+
+@router.callback_query(
+    F.data == "employee:cancel",
+    AddEmployeeStates.confirming
+)
+async def cancel_create_employee(callback: CallbackQuery, state: FSMContext):
+    """Отменить создание сотрудника."""
+
+    await state.clear()
+    await callback.message.edit_text("❌ Добавление сотрудника отменено")
+    await callback.message.answer(
+        "Главное меню:",
+        reply_markup=admin_menu
+    )
+    await callback.answer()
 
 
 @router.message(F.text == "📋 Список сотрудников")

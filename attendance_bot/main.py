@@ -8,6 +8,7 @@ from core.logger import setup_logging
 
 from database.session import AsyncSessionLocal as async_session
 from middlewares.db import DbSessionMiddleware
+from middlewares.bot import BotMiddleware
 
 from bot.handlers import admin_router, user_router, anonymous_router
 
@@ -23,6 +24,7 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     dp.update.middleware(DbSessionMiddleware(async_session))
+    dp.update.middleware(BotMiddleware(bot))
 
     dp.include_router(admin_router)
     dp.include_router(user_router)

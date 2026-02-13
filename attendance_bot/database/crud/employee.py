@@ -1,11 +1,17 @@
+# database/crud/employee.py
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from database.models import Employee, InviteCode
 from database.enums import RoleEnum
+from database.models import Employee, InviteCode
 from schemas.employee import EmployeeCreate
+
+# Константа — срок действия инвайт-кода (часы)
+INVITE_EXPIRE_HOURS = 48
 
 
 async def create_employee(
@@ -13,6 +19,7 @@ async def create_employee(
     employee_data: EmployeeCreate,
     role: RoleEnum = RoleEnum.USER,
     create_invite: bool = True,
+    invite_expire_hours: int = INVITE_EXPIRE_HOURS,
 ) -> Employee:
     """Создаёт нового сотрудника в базе данных."""
 
@@ -38,9 +45,13 @@ async def create_employee(
     await session.flush()
 
     if create_invite:
+        expires_at = datetime.now(
+            timezone.utc) + timedelta(hours=invite_expire_hours)
+
         invite_code = InviteCode(
             employee_id=employee.id,
             created_by=employee.id,
+            expires_at=expires_at,  # ← ДОБАВИЛИ!
         )
         session.add(invite_code)
 
@@ -102,13 +113,7 @@ async def list_employees(session: AsyncSession) -> list[Employee]:
     """Получает всех сотрудников из базы данных."""
 
     result = await session.execute(
-        select(Employee).order_by(
-            Employee.id,
-            Employee.last_name,
-            Employee.name,
-            Employee.position,
-            Employee.role
-        )
+        select(Employee).order_by(Employee.last_name, Employee.name)
     )
     return result.scalars().all()
 
@@ -136,5 +141,66 @@ async def get_employee_by_telegram_id(
 
     result = await session.execute(
         select(Employee).where(Employee.telegram_id == telegram_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_employee_role(
+    session: AsyncSession,
+    telegram_id: int,
+) -> str | None:
+    """Получить роль пользователя. None если не найден."""
+
+    employee = await get_employee_by_telegram_id(session, telegram_id)
+    if not employee:
+        return None
+    return employee.role
+
+
+async def is_user_verified(
+    session: AsyncSession,
+    telegram_id: int,
+) -> bool:
+    """Проверить, верифицирован ли пользователь."""
+
+    employee = await get_employee_by_telegram_id(session, telegram_id)
+    return employee is not None
+
+
+async def is_user_admin(
+    session: AsyncSession,
+    telegram_id: int,
+) -> bool:
+    """Проверить, является ли пользователь админом."""
+
+    employee = await get_employee_by_telegram_id(session, telegram_id)
+    if not employee:
+        return False
+    return employee.role in ("admin", "superuser")
+
+
+async def get_admin_telegram_ids(
+    session: AsyncSession,
+) -> list[int]:
+    """Получить telegram_id всех активных администраторов."""
+
+    result = await session.execute(
+        select(Employee.telegram_id).where(
+            Employee.role.in_(["admin", "superuser"]),
+            Employee.telegram_id.isnot(None),
+            Employee.is_active.is_(True)
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def get_employee_with_details(
+    session: AsyncSession,
+    employee_id: int
+) -> Employee | None:
+    """Получить сотрудника с подробными данными для уведомлений."""
+
+    result = await session.execute(
+        select(Employee).where(Employee.id == employee_id)
     )
     return result.scalar_one_or_none()

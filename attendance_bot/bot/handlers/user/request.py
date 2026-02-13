@@ -1,53 +1,51 @@
 from datetime import date
 
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from sqlalchemy import select
+from aiogram.types import CallbackQuery, Message
 
-from database.models import Employee, AbsenceRequest, AbsenceRequestHistory
-from database.enums import RequestStatusEnum, ChangeTypeEnum
-from bot.keyboards.user.request import (
-    get_request_type_keyboard,
-    get_confirm_keyboard,
-    get_cancel_keyboard,
-    REQUEST_TYPE_LABELS
-)
+from bot.keyboards.admin.menu import admin_menu
 from bot.keyboards.user.calendar import (
     get_calendar_keyboard,
+    get_next_month,
     get_prev_month,
-    get_next_month
 )
-from bot.states.states_fsm import CreateRequestStates
-from bot.keyboards.admin.menu import admin_menu
+from bot.keyboards.user.request import comment_keyboard
 from bot.keyboards.user.menu import user_menu
+from bot.keyboards.user.request import (
+    REQUEST_TYPE_LABELS,
+    get_confirm_keyboard,
+    get_request_type_keyboard,
+)
+from bot.services.notifications import NotificationService
+from bot.states.states_fsm import CreateRequestStates
+from database.crud.employee import (
+    get_employee_by_telegram_id,
+    get_employee_role
+)
+from database.crud.requests import create_absence_request
 
 router = Router()
+
+
+def _get_menu_by_role(role: str | None):
+    """Возвращает клавиатуру меню по роли."""
+
+    if role in ("admin", "superuser"):
+        return admin_menu
+    return user_menu
 
 
 @router.message(F.text == "📝 Подать заявку")
 async def start_request(message: Message, state: FSMContext):
     """Начинает процесс создания заявки."""
 
+    await state.clear()
     await state.set_state(CreateRequestStates.choosing_type)
     await message.answer(
-        "📝 <b>Новая заявка</b>\n\n"
-        "Выберите тип отсутствия:",
+        "📝 <b>Новая заявка</b>\n\nВыберите тип отсутствия:",
         reply_markup=get_request_type_keyboard()
     )
-
-
-async def get_menu_by_role(session, telegram_id):
-    """Возвращает меню в зависимости от роли пользователя."""
-
-    result = await session.execute(
-        select(Employee).where(Employee.telegram_id == telegram_id)
-    )
-    employee = result.scalar_one_or_none()
-
-    if employee and employee.role in ("admin", "superuser"):
-        return admin_menu
-    return user_menu
 
 
 @router.callback_query(F.data == "req_cancel")
@@ -57,8 +55,11 @@ async def cancel_request(callback: CallbackQuery, state: FSMContext, session):
     await state.clear()
     await callback.message.edit_text("❌ Создание заявки отменено")
 
-    menu = await get_menu_by_role(session, callback.from_user.id)
-    await callback.message.answer("Главное меню:", reply_markup=menu)
+    role = await get_employee_role(session, callback.from_user.id)
+    await callback.message.answer(
+        "Главное меню:",
+        reply_markup=_get_menu_by_role(role)
+    )
     await callback.answer()
 
 
@@ -77,6 +78,42 @@ async def process_type(callback: CallbackQuery, state: FSMContext):
         reply_markup=get_calendar_keyboard(prefix="start")
     )
     await state.set_state(CreateRequestStates.entering_start_date)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("start:past:"))
+async def past_date_start_alert(callback: CallbackQuery):
+    """Алерт при попытке выбрать прошедшую дату начала."""
+
+    await callback.answer(
+        "❌ Нельзя выбрать дату в прошлом!\n"
+        "Выберите сегодняшний или будущий день.",
+        show_alert=True
+    )
+
+
+@router.callback_query(F.data.startswith("end:past:"))
+async def past_date_end_alert(callback: CallbackQuery):
+    """Алерт при попытке выбрать прошедшую дату окончания."""
+
+    await callback.answer(
+        "❌ Нельзя выбрать дату в прошлом!\n"
+        "Выберите сегодняшний или будущий день.",
+        show_alert=True
+    )
+
+
+@router.callback_query(F.data.startswith("start:ignore"))
+async def ignore_start_button(callback: CallbackQuery):
+    """Игнорировать нажатие на неактивную кнопку."""
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("end:ignore"))
+async def ignore_end_button(callback: CallbackQuery):
+    """Игнорировать нажатие на неактивную кнопку."""
+
     await callback.answer()
 
 
@@ -114,8 +151,10 @@ async def process_start_date(callback: CallbackQuery, state: FSMContext):
     await state.update_data(start_date=start_date.isoformat())
 
     data = await state.get_data()
-    type_name = REQUEST_TYPE_LABELS.get(data["request_type"],
-                                        data["request_type"])
+    type_name = REQUEST_TYPE_LABELS.get(
+        data["request_type"],
+        data["request_type"]
+    )
 
     await callback.message.edit_text(
         f"📝 <b>Новая заявка</b>\n\n"
@@ -125,13 +164,6 @@ async def process_start_date(callback: CallbackQuery, state: FSMContext):
         reply_markup=get_calendar_keyboard(int(year), int(month), prefix="end")
     )
     await state.set_state(CreateRequestStates.entering_end_date)
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("start:ignore"))
-async def ignore_start(callback: CallbackQuery):
-    """Игнорирует нажатие на неактивную кнопку."""
-
     await callback.answer()
 
 
@@ -167,41 +199,88 @@ async def process_end_date(callback: CallbackQuery, state: FSMContext):
     end_date = date(int(year), int(month), int(day))
 
     data = await state.get_data()
+
+    if "start_date" not in data:
+        await callback.answer(
+            "❌ Сначала выберите дату начала",
+            show_alert=True
+        )
+        return
+
     start_date = date.fromisoformat(data["start_date"])
 
     if end_date < start_date:
-        await callback.answer("❌ Дата окончания не может быть раньше начала!",
-                              show_alert=True)
+        await callback.answer(
+            "❌ Дата окончания не может быть раньше начала!",
+            show_alert=True
+        )
         return
 
     await state.update_data(end_date=end_date.isoformat())
 
-    type_name = REQUEST_TYPE_LABELS.get(data["request_type"],
-                                        data["request_type"])
+    type_name = REQUEST_TYPE_LABELS.get(
+        data["request_type"],
+        data["request_type"]
+    )
 
     await callback.message.edit_text(
         f"📝 <b>Новая заявка</b>\n\n"
         f"Тип: {type_name}\n"
         f"📅 Период: {start_date.strftime('%d.%m.%Y')} — "
         f"{end_date.strftime('%d.%m.%Y')}\n\n"
-        f"💬 Введите <b>комментарий</b> (причина отсутствия)\n"
-        f"Или отправьте <b>-</b> чтобы пропустить:",
-        reply_markup=get_cancel_keyboard()
+        f"💬 Введите комментарий (причина):",
+        reply_markup=comment_keyboard()
     )
     await state.set_state(CreateRequestStates.entering_comment)
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("end:ignore"))
-async def ignore_end(callback: CallbackQuery):
-    """Игнорирует нажатие на неактивную кнопку."""
+@router.callback_query(F.data == "comment:skip")
+async def skip_comment(callback: CallbackQuery, state: FSMContext, session):
+    """Пропускает ввод комментария."""
 
+    data = await state.get_data()
+
+    if "start_date" not in data or "end_date" not in data:
+        await callback.answer(
+            "❌ Данные устарели. Начните заново.",
+            show_alert=True
+        )
+        await state.clear()
+
+        role = await get_employee_role(session, callback.from_user.id)
+        await callback.message.edit_text("❌ Сессия истекла")
+        await callback.message.answer(
+            "Главное меню:",
+            reply_markup=_get_menu_by_role(role)
+        )
+        return
+
+    await state.update_data(comment=None)
+
+    start_date = date.fromisoformat(data["start_date"])
+    end_date = date.fromisoformat(data["end_date"])
+    type_name = REQUEST_TYPE_LABELS.get(
+        data["request_type"],
+        data["request_type"]
+    )
+
+    await callback.message.edit_text(
+        f"📋 <b>Проверьте заявку:</b>\n\n"
+        f"📌 Тип: {type_name}\n"
+        f"📅 Период: {start_date.strftime('%d.%m.%Y')} — "
+        f"{end_date.strftime('%d.%m.%Y')}\n"
+        f"💬 Комментарий: Не указан\n\n"
+        f"Всё верно?",
+        reply_markup=get_confirm_keyboard()
+    )
+    await state.set_state(CreateRequestStates.confirming)
     await callback.answer()
 
 
 @router.message(CreateRequestStates.entering_comment)
 async def process_comment(message: Message, state: FSMContext):
-    """Обрабатывает ввод комментария."""
+    """Обрабатывает ввод комментария текстом."""
 
     comment = message.text.strip()
     if comment == "-":
@@ -212,8 +291,10 @@ async def process_comment(message: Message, state: FSMContext):
 
     start_date = date.fromisoformat(data["start_date"])
     end_date = date.fromisoformat(data["end_date"])
-    type_name = REQUEST_TYPE_LABELS.get(data["request_type"],
-                                        data["request_type"])
+    type_name = REQUEST_TYPE_LABELS.get(
+        data["request_type"],
+        data["request_type"]
+    )
 
     await message.answer(
         f"📋 <b>Проверьте заявку:</b>\n\n"
@@ -231,67 +312,84 @@ async def process_comment(message: Message, state: FSMContext):
 async def edit_request(callback: CallbackQuery, state: FSMContext):
     """Возвращает к началу создания заявки."""
 
+    await state.clear()
     await state.set_state(CreateRequestStates.choosing_type)
     await callback.message.edit_text(
-        "📝 <b>Новая заявка</b>\n\n"
-        "Выберите тип отсутствия:",
+        "📝 <b>Новая заявка</b>\n\nВыберите тип отсутствия:",
         reply_markup=get_request_type_keyboard()
     )
     await callback.answer()
 
 
 @router.callback_query(F.data == "req_confirm")
-async def confirm_request(callback: CallbackQuery, state: FSMContext, session):
-    """Сохраняет заявку в базу данных."""
+async def confirm_request(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session,
+    bot: Bot
+):
+    """Сохраняет заявку и отправляет уведомления."""
 
     data = await state.get_data()
 
-    result = await session.execute(
-        select(Employee).where(Employee.telegram_id == callback.from_user.id)
-    )
-    employee = result.scalar_one_or_none()
+    if "start_date" not in data or "end_date" not in data:
+        await callback.answer(
+            "❌ Данные устарели. Начните заново.",
+            show_alert=True
+        )
+        await state.clear()
+        return
 
-    if not employee:
+    start_date = date.fromisoformat(data["start_date"])
+    end_date = date.fromisoformat(data["end_date"])
+
+    request = await create_absence_request(
+        session=session,
+        telegram_id=callback.from_user.id,
+        request_type=data["request_type"],
+        start_date=start_date,
+        end_date=end_date,
+        comment=data.get("comment"),
+    )
+
+    if not request:
         await callback.message.edit_text("❌ Ошибка: профиль не найден")
         await state.clear()
         await callback.answer()
         return
 
-    request = AbsenceRequest(
-        employee_id=employee.id,
-        request_type=data["request_type"],
-        start_date=date.fromisoformat(data["start_date"]),
-        end_date=date.fromisoformat(data["end_date"]),
-        comment=data.get("comment"),
-        status=RequestStatusEnum.PENDING.value
+    employee = await get_employee_by_telegram_id(
+        session, callback.from_user.id
     )
-    session.add(request)
-    await session.flush()
 
-    history = AbsenceRequestHistory(
-        request_id=request.id,
-        changed_by=employee.id,
-        change_type=ChangeTypeEnum.CREATED.value,
-        new_value=RequestStatusEnum.PENDING.value,
-        reason="Заявка создана"
+    notifier = NotificationService(bot)
+
+    admin_results = await notifier.notify_admins_new_request(
+        session, request, employee
     )
-    session.add(history)
-    await session.commit()
+
+    await notifier.notify_user_request_created(
+        callback.from_user.id, request
+    )
 
     await state.clear()
 
-    type_name = REQUEST_TYPE_LABELS.get(data["request_type"],
-                                        data["request_type"])
-    start = date.fromisoformat(data["start_date"]).strftime('%d.%m.%Y')
-    end = date.fromisoformat(data["end_date"]).strftime('%d.%m.%Y')
+    type_name = REQUEST_TYPE_LABELS.get(
+        data["request_type"],
+        data["request_type"]
+    )
 
     await callback.message.edit_text(
-        f"✅ <b>Заявка отправлена!</b>\n\n"
+        f"✅ <b>Заявка #{request.id} отправлена!</b>\n\n"
         f"📌 Тип: {type_name}\n"
-        f"📅 Период: {start} — {end}\n"
-        f"🕐 Статус: ожидает рассмотрения\n\n"
-        f"Вы получите уведомление, когда заявку рассмотрят."
+        f"📅 Период: {start_date.strftime('%d.%m.%Y')} — "
+        f"{end_date.strftime('%d.%m.%Y')}\n\n"
+        f"📨 Уведомлено администраторов: {len(admin_results['success'])}"
     )
-    menu = await get_menu_by_role(session, callback.from_user.id)
-    await callback.message.answer("Главное меню:", reply_markup=menu)
-    await callback.answer("Заявка отправлена!")
+
+    role = await get_employee_role(session, callback.from_user.id)
+    await callback.message.answer(
+        "Главное меню:",
+        reply_markup=_get_menu_by_role(role)
+    )
+    await callback.answer("✅ Заявка отправлена!")

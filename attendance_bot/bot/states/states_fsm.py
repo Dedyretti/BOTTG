@@ -16,16 +16,11 @@ class AddEmployeeStates(StatesGroup):
     waiting_email = State()
     waiting_position = State()
     waiting_role = State()
+    confirming = State()
 
 
 class InviteCodeStates(StatesGroup):
     """Состояния для создания инвайт-кода."""
-
-    waiting_email = State()
-
-
-class DeactivateStates(StatesGroup):
-    """Состояния для деактивации сотрудника."""
 
     waiting_email = State()
 
@@ -45,3 +40,9 @@ class CreateRequestStates(StatesGroup):
     entering_end_date = State()
     entering_comment = State()
     confirming = State()
+
+
+class RejectRequestStates(StatesGroup):
+    """Состояния для отклонения заявки."""
+
+    entering_reason = State()

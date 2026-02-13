@@ -11,6 +11,7 @@ def get_confirm_delete_keyboard(employee_id: int):
     )
     builder.button(text="❌ Отмена", callback_data="delete_cancel")
     builder.adjust(2)
+
     return builder.as_markup()
 
 
@@ -22,4 +23,26 @@ def get_selection_role_keyboard():
     builder.button(text="👑 Администратор", callback_data="role:admin")
     builder.button(text="❌ Отмена", callback_data="role:cancel")
     builder.adjust(1)
+
+    return builder.as_markup()
+
+
+def get_confirm_employee_keyboard():
+    """Клавиатура подтверждения создания сотрудника."""
+
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="✅ Создать сотрудника",
+        callback_data="employee:confirm"
+    )
+    builder.button(
+        text="✏️ Изменить",
+        callback_data="employee:edit"
+    )
+    builder.button(
+        text="❌ Отмена",
+        callback_data="employee:cancel"
+    )
+    builder.adjust(1)
+
     return builder.as_markup()

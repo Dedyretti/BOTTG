@@ -35,3 +35,4 @@ class ChangeTypeEnum(str, Enum):
     STATUS_CHANGED = "status_changed"
     COMMENT_UPDATED = "comment_updated"
     CANCELLED = "cancelled"
+    COMMENT_ADDED = "comment_added"
