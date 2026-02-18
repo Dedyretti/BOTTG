@@ -1,4 +1,5 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def get_confirm_delete_keyboard(employee_id: int):
@@ -36,13 +37,45 @@ def get_confirm_employee_keyboard():
         callback_data="employee:confirm"
     )
     builder.button(
-        text="✏️ Изменить",
-        callback_data="employee:edit"
-    )
-    builder.button(
         text="❌ Отмена",
         callback_data="employee:cancel"
     )
     builder.adjust(1)
+
+    return builder.as_markup()
+
+
+def get_all_requests_pagination_keyboard(
+    page: int,
+    total_pages: int
+) -> InlineKeyboardMarkup:
+    """Создаёт клавиатуру пагинации для всех заявок."""
+    builder = InlineKeyboardBuilder()
+
+    nav_buttons = []
+
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data=f"all_req:page:{page - 1}"
+        ))
+
+    nav_buttons.append(InlineKeyboardButton(
+        text=f"{page + 1}/{total_pages}",
+        callback_data="all_req:ignore"
+    ))
+
+    if page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton(
+            text="Вперёд ▶️",
+            callback_data=f"all_req:page:{page + 1}"
+        ))
+
+    builder.row(*nav_buttons)
+
+    builder.row(InlineKeyboardButton(
+        text="✖️ Закрыть",
+        callback_data="all_req:close"
+    ))
 
     return builder.as_markup()

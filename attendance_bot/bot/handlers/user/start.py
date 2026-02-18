@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
-from bot.keyboards.user.menu import user_menu
+from bot.keyboards.user.reply_keyboards import user_menu
 from bot.lexicon.lexicon import StartMessages
 from core.logger import setup_logging
 from database.crud.employee import get_employee_by_telegram_id

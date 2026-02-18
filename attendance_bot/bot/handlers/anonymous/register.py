@@ -4,8 +4,6 @@ from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot.keyboards.admin.menu import admin_menu
-from bot.keyboards.user.menu import user_menu
 from bot.lexicon.lexicon import RegisterMessages, RoleNames
 from bot.states.states_fsm import RegisterStates
 from core.logger import setup_logging
@@ -20,17 +18,18 @@ from database.crud.invite_code import (
     get_invite_code_for_employee,
     mark_invite_code_used,
 )
+from bot.utils.utils import get_menu_by_role
 
 logger = setup_logging(__name__)
+
 router = Router()
 
 
-def _get_menu_by_role(role: str):
-    """Возвращает клавиатуру по роли."""
+@router.message(RegisterStates.waiting_email)
+async def process_email_start(message: Message, state: FSMContext, session):
+    """Начало процесса регистрации - запрос email."""
 
-    if role in ("admin", "superuser"):
-        return admin_menu
-    return user_menu
+    await process_email(message, state, session)
 
 
 @router.message(RegisterStates.waiting_email)
@@ -101,7 +100,7 @@ async def process_code(message: Message, state: FSMContext, session):
 
     await message.answer(
         RegisterMessages.SUCCESS.format(role=role_text),
-        reply_markup=_get_menu_by_role(employee.role),
+        reply_markup=get_menu_by_role(employee.role),
         parse_mode="HTML"
     )
 

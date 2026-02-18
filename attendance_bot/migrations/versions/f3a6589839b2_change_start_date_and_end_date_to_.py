@@ -1,8 +1,8 @@
-"""init_postgres
+"""change start_date and end_date to datetime with timezone
 
-Revision ID: dca83c921a16
+Revision ID: f3a6589839b2
 Revises: 
-Create Date: 2026-02-11 10:56:53.020216
+Create Date: 2026-02-16 15:28:22.648889
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'dca83c921a16'
+revision: str = 'f3a6589839b2'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -31,8 +31,8 @@ def upgrade() -> None:
     sa.Column('position', sa.String(length=200), nullable=True),
     sa.Column('role', sa.String(length=50), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_employees_email'), 'employees', ['email'], unique=True)
@@ -42,13 +42,13 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('employee_id', sa.Integer(), nullable=False),
     sa.Column('request_type', sa.String(length=50), nullable=False),
-    sa.Column('start_date', sa.Date(), nullable=False),
-    sa.Column('end_date', sa.Date(), nullable=False),
+    sa.Column('start_date', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('end_date', sa.DateTime(timezone=True), nullable=False),
     sa.Column('comment', sa.Text(), nullable=True),
     sa.Column('status', sa.String(length=50), nullable=False),
     sa.Column('rejected_reason', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.ForeignKeyConstraint(['employee_id'], ['employees.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -61,7 +61,7 @@ def upgrade() -> None:
     sa.Column('code', sa.UUID(), nullable=False),
     sa.Column('employee_id', sa.Integer(), nullable=False),
     sa.Column('created_by', sa.Integer(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('is_used', sa.Boolean(), nullable=False),
     sa.Column('used_at', sa.DateTime(timezone=True), nullable=True),
@@ -79,7 +79,7 @@ def upgrade() -> None:
     sa.Column('change_type', sa.String(length=50), nullable=False),
     sa.Column('old_value', sa.Text(), nullable=True),
     sa.Column('new_value', sa.Text(), nullable=True),
-    sa.Column('changed_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('changed_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('reason', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['changed_by'], ['employees.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['request_id'], ['absence_requests.id'], ondelete='CASCADE'),
@@ -94,7 +94,7 @@ def upgrade() -> None:
     sa.Column('admin_id', sa.Integer(), nullable=False),
     sa.Column('message_id', sa.BigInteger(), nullable=False),
     sa.Column('chat_id', sa.BigInteger(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['admin_id'], ['employees.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['request_id'], ['absence_requests.id'], ondelete='CASCADE'),

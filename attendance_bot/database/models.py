@@ -1,9 +1,8 @@
-from datetime import date, datetime
+from datetime import datetime
 import uuid
 
 from sqlalchemy import (
     BigInteger,
-    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -122,8 +121,8 @@ class AbsenceRequest(Base):
         ForeignKey("employees.id", ondelete="CASCADE")
     )
     request_type: Mapped[str] = mapped_column(String(50))
-    start_date: Mapped[date] = mapped_column(Date)
-    end_date: Mapped[date] = mapped_column(Date)
+    start_date: Mapped[str] = mapped_column(DateTime(timezone=True))
+    end_date: Mapped[str] = mapped_column(DateTime(timezone=True))
     comment: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(50))
     rejected_reason: Mapped[str | None] = mapped_column(Text)

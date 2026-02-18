@@ -11,8 +11,7 @@ async def create_admin_notification(
     message_id: int,
     chat_id: int
 ) -> AdminNotification:
-    """Создать запись об уведомлении админа."""
-
+    """Создаёт запись об уведомлении админа."""
     notification = AdminNotification(
         request_id=request_id,
         admin_id=admin_id,
@@ -31,8 +30,7 @@ async def get_active_notifications_for_request(
     request_id: int,
     exclude_admin_id: int | None = None
 ) -> list[AdminNotification]:
-    """Получить все активные уведомления для заявки."""
-
+    """Получает все активные уведомления для заявки."""
     query = select(AdminNotification).where(
         AdminNotification.request_id == request_id,
         AdminNotification.is_active.is_(True)
@@ -50,8 +48,7 @@ async def deactivate_notifications_for_request(
     request_id: int,
     exclude_admin_id: int | None = None
 ) -> None:
-    """Деактивировать уведомления для заявки."""
-
+    """Деактивирует уведомления для заявки."""
     query = (
         update(AdminNotification)
         .where(

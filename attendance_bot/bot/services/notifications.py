@@ -1,3 +1,4 @@
+from datetime import timezone, timedelta
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -12,6 +13,8 @@ from database.crud.admin_notifications import (
     get_active_notifications_for_request,
 )
 from database.models import AbsenceRequest, Employee
+
+MSK = timezone(timedelta(hours=3))
 
 
 class NotificationService:
@@ -292,7 +295,9 @@ class NotificationService:
 
         days = (request.end_date - request.start_date).days + 1
         type_name = type_names.get(request.request_type, request.request_type)
-
+        created_at_msk = request.created_at.replace(
+            tzinfo=timezone.utc
+        ).astimezone(MSK)
         full_name = f"{employee.last_name} {employee.name}"
         if employee.patronymic:
             full_name += f" {employee.patronymic}"
@@ -312,7 +317,7 @@ class NotificationService:
 
         text += (
             f"\n🕐 <b>Подано:</b> "
-            f"{request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            f"{created_at_msk.strftime('%d.%m.%Y %H:%M')} (МСК)\n"
             f"🆔 <b>ID:</b> #{request.id}"
         )
 

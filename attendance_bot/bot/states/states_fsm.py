@@ -33,13 +33,19 @@ class DeleteStates(StatesGroup):
 
 
 class CreateRequestStates(StatesGroup):
-    """Состояния для создания заявки на отсутствие."""
+    """Состояния создания заявки."""
 
     choosing_type = State()
     entering_start_date = State()
     entering_end_date = State()
+    entering_partial_date = State()
+    entering_partial_start_time = State()
+    entering_partial_end_time = State()
     entering_comment = State()
     confirming = State()
+
+    keyboard_type = State()
+    keyboard_message_id = State()
 
 
 class RejectRequestStates(StatesGroup):
