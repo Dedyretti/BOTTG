@@ -1,9 +1,8 @@
-from datetime import date, datetime, timedelta
+from datetime import datetime
 import uuid
 
 from sqlalchemy import (
     BigInteger,
-    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -37,7 +36,9 @@ class Employee(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     invite_codes: Mapped[list["InviteCode"]] = relationship(
@@ -88,7 +89,6 @@ class InviteCode(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now() + timedelta(days=1),
     )
     is_used: Mapped[bool] = mapped_column(default=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -121,8 +121,8 @@ class AbsenceRequest(Base):
         ForeignKey("employees.id", ondelete="CASCADE")
     )
     request_type: Mapped[str] = mapped_column(String(50))
-    start_date: Mapped[date] = mapped_column(Date)
-    end_date: Mapped[date] = mapped_column(Date)
+    start_date: Mapped[str] = mapped_column(DateTime(timezone=True))
+    end_date: Mapped[str] = mapped_column(DateTime(timezone=True))
     comment: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(50))
     rejected_reason: Mapped[str | None] = mapped_column(Text)

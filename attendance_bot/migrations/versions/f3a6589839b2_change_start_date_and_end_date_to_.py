@@ -1,8 +1,8 @@
-"""Create employees table
+"""change start_date and end_date to datetime with timezone
 
-Revision ID: f62cb31fadd1
+Revision ID: f3a6589839b2
 Revises: 
-Create Date: 2026-02-04 14:22:06.332260
+Create Date: 2026-02-16 15:28:22.648889
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f62cb31fadd1'
+revision: str = 'f3a6589839b2'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -42,8 +42,8 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('employee_id', sa.Integer(), nullable=False),
     sa.Column('request_type', sa.String(length=50), nullable=False),
-    sa.Column('start_date', sa.Date(), nullable=False),
-    sa.Column('end_date', sa.Date(), nullable=False),
+    sa.Column('start_date', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('end_date', sa.DateTime(timezone=True), nullable=False),
     sa.Column('comment', sa.Text(), nullable=True),
     sa.Column('status', sa.String(length=50), nullable=False),
     sa.Column('rejected_reason', sa.Text(), nullable=True),

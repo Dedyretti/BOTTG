@@ -1,30 +1,41 @@
-"""Клавиатуры для администратора."""
-
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 admin_menu = ReplyKeyboardMarkup(
     keyboard=[
-        [
-            KeyboardButton(text="📋 Новые заявки"),
-            KeyboardButton(text="📁 Все заявки")
-        ],
-        [
-            KeyboardButton(text="👥 Сотрудники"),
-            KeyboardButton(text="➕ Добавить сотрудника")
-        ],
-        [
-            KeyboardButton(text="📝 Подать заявку"),
-            KeyboardButton(text="📋 Мои заявки")
-        ],
-        [
-            KeyboardButton(text="📊 Отчёты"),
-        ],
+        [KeyboardButton(text="📁 Заявки")],
+        [KeyboardButton(text="👥 Сотрудники")],
+        [KeyboardButton(text="📊 Отчёты")],
     ],
     resize_keyboard=True,
     input_field_placeholder="Выберите действие"
 )
 
+requests_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="📋 Новые заявки"),
+            KeyboardButton(text="📁 Все заявки")
+        ],
+        [KeyboardButton(text="🔙 Главное меню")],
+    ],
+    resize_keyboard=True,
+    input_field_placeholder="Выберите действие"
+)
+
+employees_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="📋 Список сотрудников"),
+            KeyboardButton(text="➕ Добавить сотрудника")
+        ],
+        [
+            KeyboardButton(text="🔑 Создать инвайт-код"),
+            KeyboardButton(text="🗑 Удалить сотрудника")
+        ],
+        [KeyboardButton(text="🔙 Главное меню")],
+    ],
+    resize_keyboard=True
+)
 
 admin_cancel_menu = ReplyKeyboardMarkup(
     keyboard=[
